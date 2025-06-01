@@ -140,7 +140,7 @@ jobs:
             }
             
             esteRepo.date = now;
-            if(event.action == "member-create") {
+            if(event.action == "member-repo-created") {
               Object.assign(esteRepo, {
                 member: event.client_payload.sender.login,
                 template: null
@@ -159,7 +159,7 @@ jobs:
           path: main
 
       - name: Registrar nueva lista
-        if: ${{ steps.get-list.outputs.result != 'null' }}
+        if: steps.get-list.outputs.result != '[]'
         uses: ./main/.github/actions/save-list
         with:
           content: ${{ steps.get-list.outputs.result }}

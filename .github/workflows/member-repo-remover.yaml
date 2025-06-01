@@ -1,5 +1,5 @@
-name: Eliminación de repositorios de un miembro
-run-name: Eliminar repos de ${{ inputs.username }}
+name: Listar/eliminar repositorios de un miembro
+run-name: Listar/eliminar repos de ${{ inputs.username }}
 on:
   workflow_dispatch:
     inputs:
@@ -7,20 +7,11 @@ on:
         description: Usuario de GitHub
         required: true
         type: string
-      delete:
-        description: Borrar archivos detectados
-        required: false
-        default: false
-        type: boolean
   workflow_call:
     inputs:
       username:
         required: true
         type: string
-      delete:
-        required: false
-        default: false
-        type: boolean
     secrets:
       ORGANIZATION_ACCESS_TOKEN:
         required: true
@@ -65,7 +56,7 @@ jobs:
 
   eliminar-repositorios:
     needs: obtener-repositorios
-    if: inputs.delete && needs.obtener-repositorios.outputs.repos != ''
+    if: needs.obtener-repositorios.outputs.repos != ''
     runs-on: ubuntu-latest
     steps:
       - name: Obtener rama principal del repositorio
@@ -89,6 +80,7 @@ jobs:
         uses: actions/github-script@v7
         with:
           result-encoding: json
+          github-token: ${{ secrets.ORGANIZATION_ACCESS_TOKEN }}
           script: |
             const repos = JSON.parse(${{ toJson(needs.obtener-repositorios.outputs.repos) }});
             const borrados = [];
@@ -113,6 +105,7 @@ jobs:
 
       - name: Mostrar resumen
         uses: actions/github-script@v7
+        if: steps.delete-repos.outputs.result != '[]'
         env:
           REPOS: '${{ needs.obtener-repositorios.outputs.repos }}'
           BORRADOS: '${{ steps.delete-repos.outputs.result }}'

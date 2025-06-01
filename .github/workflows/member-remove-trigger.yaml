@@ -1,4 +1,4 @@
-name: Proceso tras eliminación de miembro
+name: Procesar la eliminación de un miembro
 run-name: "Proceso tras eliminar a '${{ github.event.client_payload.membership.user.login }}'"
 
 on:
@@ -29,7 +29,6 @@ jobs:
     uses: ./.github/workflows/member-repo-remover.yaml
     with:
       username: ${{ github.event.client_payload.membership.user.login }}
-      delete: true
     secrets:
       ORGANIZATION_ACCESS_TOKEN: ${{ secrets.ORGANIZATION_ACCESS_TOKEN }}
     permissions:

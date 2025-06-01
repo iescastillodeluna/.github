@@ -154,7 +154,9 @@ jobs:
             // así que si lo era antes, tendrá que dejar de serlo.
             else if(repo.member) {
               core.notice(`El repositorio '${repo.name}' tiene manipulados sus permisos y ya no se considera propio de un '${repo.member}'`);
-              repo.member = null;
+              // No ponemos null para distinguirlos de los que nunca fueron de miembro,
+              // ya que estos hay que eliminarlos del registro.
+              repo.member = '';
             }
 
             // En este punto, los repositorios con member: null
@@ -232,10 +234,18 @@ jobs:
           token: ${{ secrets.ORGANIZATION_ACCESS_TOKEN }}
           path: ${{ env.WORK_DIR }}
 
+      - name: Aplicar último filtro
+        id: last-filter
+        uses: actions/github-script@v7
+        with:
+          result-encoding: json
+          script: |
+            return JSON.parse(${{ toJSON(needs.generar-registro.outputs.registro) }}).filter(r -> r.member != '');
+
       - name: Guardar registro en el repositorio
         uses: ./main/.github/actions/save-list
         with:
-          content: ${{ needs.generar-registro.outputs.registro }}
+          content: ${{ steps.last-filter.outputs.registro }}
           file: ${{ env.FILE }}
           branch: ${{ env.BRANCH }}
           path: ${{ env.WORK_DIR }}
