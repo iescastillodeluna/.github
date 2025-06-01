@@ -20,6 +20,7 @@ jobs:
   obtener-registro-repositorios:
     outputs:
       repos: ${{ steps.get-list.outputs.result }}
+      members: ${{ steps.get-members.outputs.esMiembro }}
     runs-on: ubuntu-latest
     steps:
       - name: Obtener rama registral del repositorio
@@ -29,6 +30,19 @@ jobs:
           token:  ${{ secrets.ORGANIZATION_ACCESS_TOKEN }}
           path: ${{ env.WORK_DIR }}
         continue-on-error: true
+
+      - name: Obtener rama principal del repositorio
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          token: ${{ secrets.ORGANIZATION_ACCESS_TOKEN }}
+          path: main
+
+      - name: Obtener miembros de la organización
+        id: get-members
+        uses: ./main/.github/actions/check-member
+        with: 
+          github-token: ${{ secrets.ORGANIZATION_ACCESS_TOKEN }}
 
       - name: Obtener registros
         id: get-list
@@ -62,7 +76,7 @@ jobs:
             })).filter(r => !r.description?.endsWith('created by GitHub Classroom'));
 
             const registrados = memberRepos
-              .filter(repo => {
+              .map(repo => {
                 const r = manuales.find(r => r.name === repo.name);
                 if(r) {
                   if(repo.template !== r.is_template) {
@@ -72,9 +86,14 @@ jobs:
                     repo.date = now;
                   }
                 } 
-                else core.warning(`'${repo.name}' no es ya un repositorio de la organización`);
-                return !!r;
-               });
+                else {
+                  core.warning(`'${repo.name}' no es ya un repositorio de la organización`);
+                  // Así marcamos que ya no existe
+                  repo.member = '###';
+                  repo.updated = true;
+                }
+                return repo;
+              });
             
             const sinregistro = manuales
               .filter(repo => !registrados.find(r => r.name === repo.name))
@@ -94,12 +113,15 @@ jobs:
       
   # Se comprueba si su creador sigue siendo el único.
   repasar-repositorios:
-    needs: comprobar-estado-repositorios
+    needs: 
+      - comprobar-estado-repositorios
+      - obtener-registro-repositorios
     strategy:
       matrix: ${{ fromJSON(needs.comprobar-estado-repositorios.outputs.repos) }}
     runs-on: ubuntu-latest
     steps:
       - name: Obtener repositorio
+        if: matrix.member != '###'
         uses: actions/checkout@v4
         with:
           ref: main
@@ -107,6 +129,7 @@ jobs:
           path: main
 
       - name: Obtener colaboradores
+        if: matrix.member != '###'
         id: get-col
         uses: ./main/.github/actions/get-collaborators
         with:
@@ -115,23 +138,19 @@ jobs:
           permission: admin
           github-token: ${{ secrets.ORGANIZATION_ACCESS_TOKEN }}
 
-      - name: Obtener miembros
-        id: get-members
-        uses: ./main/.github/actions/check-member
-        with: 
-          github-token: ${{ secrets.ORGANIZATION_ACCESS_TOKEN }}
-
       - name: Determinar miembro
         id: set-member
         uses: actions/github-script@v7
         with:
           result-encoding: json
           script: |
-            const collaborators = JSON.parse(${{ toJson(steps.get-col.outputs.collaborators) }})
-            const members = JSON.parse(${{ toJson(steps.get-members.outputs.esMiembro) }})
-            const now = new Date().toISOString();
-
             const repo = ${{ toJson(matrix) }};
+            // Estos repositorios no existen ya.
+            if(repo.member == '###') return repo;
+
+            const collaborators = JSON.parse(${{ toJson(steps.get-col.outputs.collaborators) }})
+            const members = JSON.parse(${{ toJson(needs.obtener-registro-repositorios.outputs.members) }})
+            const now = new Date().toISOString();
 
             // Si se eliminó el usuario, entonces dejó de tener permisos;
             // así que fingimos que los sigue teniendo para razonar.
@@ -151,12 +170,13 @@ jobs:
               }
             }
             // El resto de repositorios no son de miembro,
-            // así que si lo era antes, tendrá que dejar de serlo.
+            // así que si lo eran antes, tendrán que dejar de serlo.
             else if(repo.member) {
               core.notice(`El repositorio '${repo.name}' tiene manipulados sus permisos y ya no se considera propio de un '${repo.member}'`);
               // No ponemos null para distinguirlos de los que nunca fueron de miembro,
               // ya que estos hay que eliminarlos del registro.
-              repo.member = '';
+              repo.member = '###';
+              repo.updated = true;
             }
 
             // En este punto, los repositorios con member: null
@@ -207,7 +227,7 @@ jobs:
 
             const summary = core.summary;
             summary.addHeading('Repositorios de miembro');
-            summary.addRaw('\n' + repos.map(r => `1. *${r.member}*  ---  [${r.name}](${r.url})${r.template?' [Plantilla]':''}`).join('\n'));
+            summary.addRaw('\n' + repos.filter(r => r.member != '###').map(r => `1. *${r.member}*  ---  [${r.name}](${r.url})${r.template?' [Plantilla]':''}`).join('\n'));
             await summary.write();
 
             if(repos.some(r => r.updated)) {
@@ -240,12 +260,12 @@ jobs:
         with:
           result-encoding: json
           script: |
-            return JSON.parse(${{ toJSON(needs.generar-registro.outputs.registro) }}).filter(r -> r.member != '');
+            return JSON.parse(${{ toJSON(needs.generar-registro.outputs.registro) }}).filter(r => r.member != '###');
 
       - name: Guardar registro en el repositorio
         uses: ./main/.github/actions/save-list
         with:
-          content: ${{ steps.last-filter.outputs.registro }}
+          content: ${{ steps.last-filter.outputs.result }}
           file: ${{ env.FILE }}
           branch: ${{ env.BRANCH }}
           path: ${{ env.WORK_DIR }}
