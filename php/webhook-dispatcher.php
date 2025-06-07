@@ -38,14 +38,7 @@ else if(empty($event)) {
         'code'   => 200,
         'message' => 'Ping recibido'
     ];
-} else if(empty($action)) {
-    $result = [
-        'status' => 'ERROR',
-        'code'   => 400,
-        'message' => 'Acción no definido'
-    ];
-}
-else if($handlerClass = WebhookFactory::getHandler($event, $action)) {
+} else if($handlerClass = WebhookFactory::getHandler($event, $action)) {
     $handlerFile = __DIR__ . "/handlers/{$handlerClass}.php";
     if(file_exists($handlerFile)) {
         require_once $handlerFile;

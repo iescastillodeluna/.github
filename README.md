@@ -100,14 +100,25 @@ tareas, se han programado en este repositorio algunos *workflows*:
      de que éste no exista. Puede ejecutarse manualmente o ser invocado por
      [member-remove-trigger.yaml](.github/workflows/member-remove-trigger.yaml),
      el cual se desencadena cuando se elimina un miembro de la organización.
-   * [member-repo-watcher](.github/workflows/member-repo-watcher), que
+   * [member-repo-watcher](.github/workflows/member-repo-watcher.yaml), que
      periódicamente comprueba si el archivo de registro refleja los repositorios
      de miembro que realmente hay en la organización para corregir errores de
      ejecución de los anteriores. Puede, además, ejecutarse manualmente.
 
-Los *workflows* se han definido en el repositorio
-[.github](https://github.com/iescastillodeluna/.github) de la organización,
-aunque podría usarse otro con cualquier otro nombre.
+1. **Sincronización**:  
+   Los *workflows* se han definido inicialmente en el repositorio
+   [.github](https://github.com/iescastillodeluna/.github) de la organización,
+   pero como éste es público, por privacidad, se ha preferido deshabilitar su
+   ejecución y sincronizar el repositorio con otro privado que es en realidad el
+   que los ejecuta y almacena los archivos JSON de registro. Para ello existe
+   otro *workflow* más:
+
+   * [sync-repo.yaml](.github/workflows/sync-repo.yaml), que se ejecuta cuando
+     se hace una operación *push* en este repositorio público para sincronizar
+     su ruta [.github/](.github/) con la misma ruta del repositorio privado que
+     realmente ejecuta los workflow. El *workflow* no se ejecuta directamente,
+     ya que los *workflows* están totalmente deshabilitados, sino que a través
+     de un *webhook* definido en el repositorio público.
 
 ### Webhook
 
@@ -132,6 +143,16 @@ de ambiente:
 > **Nota**  
 > En el archivo ``config.inc`` se puede modificar el nombre del repositorio en
 > el que se alojan los *workflows*.
+
+Además, en el propio repositorio público (y no en la organización) es necesario
+definir otro *webhook* que envía la notificación del evento cuando se hace una
+operación *push*:
+
+![Definición del webhook de repositorio](docs/assets/02b.push-webhook.png)
+
+El *script* del servidor, al recibirlo, envía al repositorio privado un evento
+de tipo ``push-dotgithub`` para que se sincronice el directorio ``.github/`` del
+repositorio privado con el del público.
 
 ### Tokens
 

@@ -4,11 +4,14 @@ class WebhookFactory {
     private const HANDLER_MAP = [
         'repository' => [
             'created' => 'RepositoryCreatedHandler',
-	    'deleted' => 'RepositoryDeletedHandler',
-	    'renamed' => 'RepositoryRenamedHandler'
+            'deleted' => 'RepositoryDeletedHandler',
+            'renamed' => 'RepositoryRenamedHandler'
         ],
         'organization' => [
             'member_removed' => 'MemberRemovedHandler'
+        ],
+        'push' => [
+            '' => 'PushRepositoryHandler'
         ]
     ];
 

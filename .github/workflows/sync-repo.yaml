@@ -1,0 +1,51 @@
+name: Sincronización con .github
+run-name: Sincronizacion de ${{ github.repository }}
+
+on:
+  workflow_dispatch:
+  repository_dispatch:
+    types:
+      - push-dotgithub
+
+jobs:
+  sincronizacion:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Obtiene repositorio
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          token: ${{ secrets.ORGANIZATION_ACCESS_TOKEN }}
+          path: private 
+          fetch-depth: 0
+
+      - name: Obtiene repositorio publico
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.event.client_payload.public_repo }}
+          path: public
+          fetch-depth: 1
+
+      - name: Actualizar repositorio
+        shell: bash
+        env:
+          USERNAME: Github Actions
+          USERMAIL: actions@github.com
+          TOKEN: ${{ secrets.ORGANIZATION_ACCESS_TOKEN }}
+        working-directory: private
+        run: |
+          rsync -av --delete ../public/.github .github
+
+          git config --local user.name "$USERNAME"
+          git config --local user.email "$USERMAIL"
+
+          if [ -z "$(git status --porcelain .github)" ]; then
+            echo "::notice::No hay cambios"
+          else
+            git remote set-url origin "https://x-access-token:$TOKEN@github.com/${{ github.repository }}"
+            git add .github
+            git commit -m "Sincronizacion de $(date -I)"
+            echo "::notice::Sincronización efectuada"
+            git push
+          fi
