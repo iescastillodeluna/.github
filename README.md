@@ -18,13 +18,13 @@ de lectura:
 
 Esta definición permite a los profesores exclusivamente:
 
-a. Crear sus propios repositorios sobre los que tendrá automáticamente permiso
+1. Crear sus propios repositorios sobre los que tendrá automáticamente permiso
    de administración.
-a. Revisar con permiso de lectura el resto de repositorios, incluidos los de sus
+1. Revisar con permiso de lectura el resto de repositorios, incluidos los de sus
    alumnos; pero sin posibilidad de alterarlos o eliminarlos.
-a. Crear tareas en la aulas de *Classroom* en las que se le haya inscrito como
+1. Crear tareas en la aulas de *Classroom* en las que se le haya inscrito como
    Administrador.
-a. Eliminar alguna de las tareas anteriores, lo que implica indirectamente
+1. Eliminar alguna de las tareas anteriores, lo que implica indirectamente
    eliminar los repositorios de los alumnos asociados a dicha tarea.
 
 > **Nota**  
@@ -52,8 +52,8 @@ acomulando repositorios que ya sean inútiles:
    de cada alumno no se basan en la plantilla misma, sino que se crea un nuevo
    repositorio que es copia de la plantilla y es éste el que se toma como base.
    Este repositorio intermedio es creado por el bot del *GitHub Classroom* y
-   será necesario mientras exista el aula que lo toma como base. Al borrarse la
-   tarea, este repositorio base no se elimina (a diferencia de los repositorios
+   será necesario mientras exista la tarea que lo toma como base. Al borrarse
+   ésta, este repositorio base no se elimina (a diferencia de los repositorios
    de estudiante que sí lo hacen) y, además, el profesor tampoco podrá hacerlo
    de forma manual, puesto que no es su creador.
 
@@ -103,10 +103,11 @@ tareas, se han programado en este repositorio algunos *workflows*:
    * [member-repo-watcher](.github/workflows/member-repo-watcher), que
      periódicamente comprueba si el archivo de registro refleja los repositorios
      de miembro que realmente hay en la organización para corregir errores de
-     ejecución de los anteriores. Puedem además, ejecutarse manualmente.
+     ejecución de los anteriores. Puede, además, ejecutarse manualmente.
 
-Los *workflows* se han definido en el repositorio *.github* de la organización,
-aunque puede usarse otro con cualquier otro nombre.
+Los *workflows* se han definido en el repositorio
+[.github](https://github.com/iescastillodeluna/.github) de la organización,
+aunque podría usarse otro con cualquier otro nombre.
 
 ### Webhook
 
@@ -122,7 +123,7 @@ El *script* se ha escrito en PHP y se encuentra dentro del directorio ``php``.
 Para su ejecución, además, se necesita que el servidor web defina dos variables
 de ambiente:
 
-* ``GITHUB_TOKEN``, que es el *token* necesario para que el *script* pueda
+* ``GITHUB_TOKEN``, que es el [token](#Tokens) necesario para que el *script* pueda
     mandar de vuelta un evento personalizado a GitHub.
 * ``GITHUB_SECRET``, que es el secreto que se define al definir el webhook y
     sirve para que nadie indiscriminadamente use el *script* para manipular los
@@ -139,11 +140,11 @@ su perfil personal dos *tokens* personales de acceso:
 
 ![Definición de tokens](docs/assets/03.tokens.png)
 
-El primero que se ve en la captura, que tiene habilitado el scope *workflow* es
-el que debe usar el script del servidor web, mientras que el segundo, con más
-permisos es el que usan los *workflows* del repositorio de configuración
-(``.github`` en nuestro caso) y debe utilizarse para definir un **secreto** en
-dicho repositorio:
+El primero en la captura, que tiene habilitado el scope *workflow*, es
+el que debe usar el *script* del servidor web; mientras que el segundo, con más
+permisos, es el que usan los *workflows* del repositorio de configuración
+(``.github`` en nuestro caso) y debe utilizarse para definir un **secreto**
+llamado ``ORGANIZATION_ACCESS_TOKEN`` en dicho repositorio:
 
 ![Definición de secret](docs/assets/04.secret.png)
 

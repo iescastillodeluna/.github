@@ -1,4 +1,4 @@
-name: Fiscalizar los repositorios base
+name: Fiscalizar repositorios base
 
 on:
   schedule:
@@ -195,7 +195,7 @@ jobs:
             const hoyString = String(hoy.getDate()).padStart(2, '0') + "/" + String(hoy.getMonth() + 1).padStart(2, '0') + "/" + hoy.getFullYear();
 
             const fs = require('fs');
-            fs.writeFileSync(filePath, JSON.stringify(plantillas, null, 2));
+            fs.writeFileSync(filePath, JSON.stringify(plantillas));
 
             // Commit y push automático
             await require('child_process').execSync(`

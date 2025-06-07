@@ -71,3 +71,10 @@ los permisos sobre el repositorio añadiendo otro miembro a ellos.
 ## Workflows
 
 Consúltese el archivo [README.md](../README.md).
+
+## Actuaciones sobre los repositorios
+
+Al margen del mantenimiento, corrección y mejora de los contenidos de
+[.github](../), el administrador debería abstenerse de realizar cualquier
+operación manual sobre los repositorios de la organización, en especial los
+creados por el *bot* de *GitHub Classroom*.
