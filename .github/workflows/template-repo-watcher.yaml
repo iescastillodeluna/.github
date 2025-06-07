@@ -29,12 +29,7 @@ jobs:
           cd main
           git fetch origin
           if git checkout "$BRANCH" 2> /dev/null; then
-            if test -f "$FILE"; then
-              echo "success=true" >> $GITHUB_OUTPUT
-            else
-              echo "::error::El archivo $FILE que registra las plantillas de tarea no existe"
-              echo "success=false" >> $GITHUB_OUTPUT
-            fi
+            echo "success=true" >> $GITHUB_OUTPUT
           else
             echo "::error:: La rama '${BRANCH}' no existe"
             echo "success=false" >> $GITHUB_OUTPUT

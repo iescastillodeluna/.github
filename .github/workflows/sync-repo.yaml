@@ -35,7 +35,7 @@ jobs:
           TOKEN: ${{ secrets.ORGANIZATION_ACCESS_TOKEN }}
         working-directory: private
         run: |
-          rsync -av --delete ../public/.github .github
+          rsync -av --delete ../public/.github/ .github/
 
           git config --local user.name "$USERNAME"
           git config --local user.email "$USERMAIL"
