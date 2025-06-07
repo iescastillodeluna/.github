@@ -24,7 +24,7 @@ Classroom](https://classroom.github.com):
 
 A diferencia de lo pueda parecer, no será capaz de añadir una nueva aula, ya que
 de intentarlo, por no tener permisos de administración, se le invitará a crear
-una nueva organización. Lo que sí podrá hacer es acceder a las aulas que les
+una nueva organización. Lo que sí podrá hacer es acceder a las aulas que le
 hayan sido asignadas:
 
 ![Pantalla con aula de GitHub Classroom](assets/gp02.aula.png)
@@ -63,14 +63,14 @@ sencillo, pero conviene aclarar algunos aspectos:
   los tengamos ya registrados como [estudiantes del aula](#Estudiantes).
 
 + La aceptación de una tarea supone para el alumno la creación de un repositorio
-  en la organización, no en su perfil personal, y éste será según los
-  configuremos durante su creación:
+  en la organización, no en su perfil personal, el cual tendrá ciertas
+  características según hayamos configurado la tarea durante su creación:
 
-  - Son repositorios privados (aunque puede decirse lo contrario) y así los
-    querremos habitualmente para que no puedan copiarse entre ellos.
-  - En principio, el alumno sólo tendrá permisos de escritura para poder hacer
-    entregas (o sea, ``push``), pero se le pueden dar permisos de
-    administración.
+  - Son repositorios privados para que no puedan copiarse entre ellos, aunque
+    se puede indicar lo contrario.
+  - El alumno sólo tendrá permisos de escritura para poder hacer la entrega
+    (o sea, ``push``), aunque se le pueden conceder permisos de administración
+    si así se desea.
   - Los profesores sólo tendrán permisos de lectura sobre estos repositorios por
     los permisos predeterminados que se han concedido a su rol de miembros
     (véase el [README](../README.md)).
@@ -83,32 +83,42 @@ sencillo, pero conviene aclarar algunos aspectos:
   principal para que no puedan realizarse operaciones de *push* sobre ella y se
   creará una rama llamada "*desarrollo*" para que el alumno escriba su solución
   en ella. El objetivo de esto es que la rama principal siempre contenga el
-  enunciado original. La protección no se llevará a cabo en caso de que:
+  enunciado original. La protección no se llevará a cabo en caso de que concurra
+  alguna de estas circunstancias:
 
   - Comience el nombre de la tarea por "*TareaNP *".
   - Se concedan al alumno en el repositorio permisos de administración.
 
 ### Plantillas
 
-El profesor puede definir un repositorio como plantilla para generar los
-repositorios de estudiantes asociados a una tarea. Así podría incluir una serie
-de archivos iniciales y un ``README.md`` con el enunciado de la tarea. Debe
+El profesor puede definir un repositorio como plantilla para los repositorios de
+estudiantes asociados a una tarea. De este modo puede incluir una serie de
+archivos iniciales y un ``README.md`` con instrucciones sobre la tarea. Debe
 tenerse en cuenta que:
 
 + El repositorio debe estar marcado como plantilla en su configuración, de lo
   contrario no podrá ser utilizado como tal.
 
-+ Puede crearlo en la propia organización (el profesor tiene permisos para crear
++ Puede crearse en la propia organización (el profesor tiene permisos para crear
   repositorios privados dentro de la organización) o en cualquier otro lugar
   siempre que el repositorio sea accesible, esto es, público.
 
 + Los repositorios de estudiante se crearán a partir del estado que tuviera la
   plantilla en el momento de la creación, por lo que modificar la plantilla a
-  posteriori no afectará a ningún repositorio de estudiante. Esto es debido a
-  que, en el momento de la creación de la tarea, el *bot* crea una copia de la
-  plantilla y es esta copia la que se usa como base para la creación de los
-  repositorios de estudiante. Esta copia aparece como repositorio en la
-  organización, pero el profesor no tiene permisos de escritura sobre ella.
+  posteriori no afectará a ningún repositorio de estudiante, incluso si el
+  estudiante se suscribe a la tarea después de haber cambiado la plantilla. Esto
+  es debido a que, en el momento de la creación de la tarea, el *bot* crea una
+  copia de la plantilla y es esta copia la que se usa como base para la creación
+  de los repositorios de estudiante. Esta copia aparece como repositorio en la
+  organización, pero el profesor no tiene permisos de administración ni
+  escritura sobre ella.
+
++ Como en el caso de los repositorios de estudiante, los *workflows* no
+  requieren un formato especial para nombrar plantillas, pero es recomendable
+  por coherencia que sus nombres empiecen por "Plantilla-XX-", siendo "XX" las
+  iniciales del módulo para el que se utiliza la plantilla. Por ejemplo,
+  ``Plantilla-AD-Tarea1.2`` si se define la plantilla para usarla en la *Tarea
+  1.2* del módulo de *Acceso a datos*.
 
 > **Nota**  
 > Es conveniente que el profesor lleve un control de estos repositorios de

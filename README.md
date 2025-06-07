@@ -106,19 +106,28 @@ tareas, se han programado en este repositorio algunos *workflows*:
      ejecución de los anteriores. Puede, además, ejecutarse manualmente.
 
 1. **Sincronización**:  
-   Los *workflows* se han definido inicialmente en el repositorio
+   Los *workflows* se han definido inicialmente en el repositorio de configuración
    [.github](https://github.com/iescastillodeluna/.github) de la organización,
    pero como éste es público, por privacidad, se ha preferido deshabilitar su
    ejecución y sincronizar el repositorio con otro privado que es en realidad el
-   que los ejecuta y almacena los archivos JSON de registro. Para ello existe
-   otro *workflow* más:
+   que los ejecuta y almacena los archivos JSON de registro. Para la sincronización
+   existe otro *workflow* más:
 
    * [sync-repo.yaml](.github/workflows/sync-repo.yaml), que se ejecuta cuando
      se hace una operación *push* en este repositorio público para sincronizar
      su ruta [.github/](.github/) con la misma ruta del repositorio privado que
-     realmente ejecuta los workflow. El *workflow* no se ejecuta directamente,
-     ya que los *workflows* están totalmente deshabilitados, sino que a través
-     de un *webhook* definido en el repositorio público.
+     realmente ejecuta los *workflows*. Este *workflow* no se ejecuta
+     directamente, puesto que los *workflows* están totalmente deshabilitados,
+     sino que a través de un *webhook* definido en el repositorio público.
+
+> **Nota**  
+> La gestión de los repositorios depende de que ante un evento (creación,
+> eliminación, etc), éste se notifique a un servidor externo y él en respuesta
+> ordene la ejecución del *workflow* correspondiente al servidor de
+> [GitHub](https://github.com). Si estas notificaciones externas fallan por
+> cualquier motivo, los archivos de registro no reflejarán la realidad. Por este
+> motivo, se ejecutan periódicamente los dos *workflows* vigilantes y se permite
+> su ejecución manual, si no se quiere esperar.
 
 ### Webhook
 
@@ -161,11 +170,11 @@ su perfil personal dos *tokens* personales de acceso:
 
 ![Definición de tokens](docs/assets/03.tokens.png)
 
-El primero en la captura, que tiene habilitado el scope *workflow*, es
-el que debe usar el *script* del servidor web; mientras que el segundo, con más
-permisos, es el que usan los *workflows* del repositorio de configuración
-(``.github`` en nuestro caso) y debe utilizarse para definir un **secreto**
-llamado ``ORGANIZATION_ACCESS_TOKEN`` en dicho repositorio:
+El segundo en la captura, que tiene habilitado el scope *workflow*, es el que
+debe usar el *script* del servidor web; mientras que el primero, con más
+permisos, es el que usan los *workflows* del repositorio privado de ejecución
+de workflows y debe utilizarse para definir un **secreto** en dicho repositorio
+llamado ``ORGANIZATION_ACCESS_TOKEN``:
 
 ![Definición de secret](docs/assets/04.secret.png)
 

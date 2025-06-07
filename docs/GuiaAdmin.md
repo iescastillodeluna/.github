@@ -8,7 +8,7 @@ de la administración.
 Las funciones del administrador son:
 
 1. Crear, archivar y eliminar las aulas que componen el [GitHub
-   Classroom](https://classroom.github.com) del organización.
+   Classroom](https://classroom.github.com) de la organización.
 1. Agregar y eliminar profesores a la organización.
 1. Vigilar el resultado de la ejecución automática de los *workflows* de
    almacenamiento y, en su caso, realizar alguna ejecución manual.
