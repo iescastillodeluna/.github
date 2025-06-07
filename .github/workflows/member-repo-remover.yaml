@@ -1,0 +1,134 @@
+name: Eliminación de repositorios de un miembro
+run-name: Eliminar repos de ${{ inputs.username }}
+on:
+  workflow_dispatch:
+    inputs:
+      username:
+        description: Usuario de GitHub
+        required: true
+        type: string
+      delete:
+        description: Borrar archivos detectados
+        required: false
+        default: false
+        type: boolean
+  workflow_call:
+    inputs:
+      username:
+        required: true
+        type: string
+      delete:
+        required: false
+        default: false
+        type: boolean
+    secrets:
+      ORGANIZATION_ACCESS_TOKEN:
+        required: true
+
+env:
+  WORK_DIR: repo
+  BRANCH: plantillas
+  FILE: repo-miembros.json
+
+jobs:
+  obtener-repositorios:
+    runs-on: ubuntu-latest
+    outputs:
+      repos: ${{ steps.get-repos.outputs.result }}
+    steps:
+      - name: Obtener la rama almacén del repositorio
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.BRANCH }}
+          token: ${{ secrets.ORGANIZATION_ACCESS_TOKEN }}
+          path: ${{ env.WORK_DIR }}
+
+      - name: Obtener repositorios
+        id: get-repos
+        uses: actions/github-script@v7
+        env:
+          MEMBER: ${{ inputs.username }}
+        with:
+          result-encoding: json
+          script: |
+            const fs = require('fs');
+
+            const { FILE, MEMBER, WORK_DIR } = process.env;
+
+            process.chdir(WORK_DIR);
+
+            const repos = (fs.existsSync(FILE)
+              ? JSON.parse(fs.readFileSync(FILE))
+              : []).filter(r => r.member === MEMBER);
+            
+            return repos;
+
+  eliminar-repositorios:
+    needs: obtener-repositorios
+    if: inputs.delete && needs.obtener-repositorios.outputs.repos != ''
+    runs-on: ubuntu-latest
+    steps:
+      - name: Obtener rama principal del repositorio
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          token: ${{ secrets.ORGANIZATION_ACCESS_TOKEN }}
+          path: main
+
+      - name: Comprobar existencia de usuario
+        id: check-member
+        uses: ./main/.github/actions/check-member
+        with:
+          creator-login: ${{ inputs.username }}
+          role: member
+          github-token: ${{ secrets.ORGANIZATION_ACCESS_TOKEN }}
+
+      - name: Eliminar repositorios
+        id: delete-repos
+        if: steps.check-member.outputs.esMiembro == 'false'
+        uses: actions/github-script@v7
+        with:
+          result-encoding: json
+          script: |
+            const repos = JSON.parse(${{ toJson(needs.obtener-repositorios.outputs.repos) }});
+            const borrados = [];
+           
+            for(const repo of repos) {
+              try {
+                await github.rest.repos.delete({
+                  owner: context.repo.owner,
+                  repo: repo.name
+                });
+                borrados.push(repo);
+              }
+              catch(error) {
+                core.error(`❌ Error eliminando ${repo.name}: ${error.message}`);
+              }
+            }
+
+            // Al borrar un repositorio, se lanza member-repo-deregister
+            // por lo que no es necesario actualizar el registro.
+
+            return borrados;
+
+      - name: Mostrar resumen
+        uses: actions/github-script@v7
+        env:
+          REPOS: '${{ needs.obtener-repositorios.outputs.repos }}'
+          BORRADOS: '${{ steps.delete-repos.outputs.result }}'
+        with:
+          script: |
+            const esMiembro = ${{ steps.check-member.outputs.esMiembro }};
+
+            if(esMiembro) {
+              core.warning(`'${{ inputs.username }}' aún es miembro por lo que no se borra nada`);
+              repos = JSON.parse(process.env.REPOS);
+            }
+            else repos = JSON.parse(process.env.BORRADOS);
+            const org = context.repo.owner;
+
+            const summary = core.summary;
+            summary.addHeading('Repositorios de miembro');
+            summary.addRaw('\n' + repos.map(r => `1. [${r.name}](https://github.com/${org}/${r.name})${r.template?' [Plantilla]':''}`).join('\n'));
+            await summary.write();
+

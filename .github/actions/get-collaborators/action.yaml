@@ -1,0 +1,60 @@
+name: Obtiene los colaboradores de un repositorio
+
+inputs:
+  repo-name:
+    description: Nombre del repositorio
+    required: true
+    type: string
+  affiliation:
+    description: Tipo de colaborador
+    required: true
+    type: string
+  permission:
+    description: Permisos
+    required: false
+    default: any
+    type: string
+  github-token:
+    required: true
+    type: string
+
+outputs:
+  collaborators:
+    description: Lista de colaboradores
+    value: ${{ steps.get-collaborators.outputs.result }}
+
+runs:
+  using: composite
+  steps:
+    - name: Obtiene colaboradores
+      id: get-collaborators
+      uses: actions/github-script@v7
+      with:
+        github-token: ${{ inputs.github-token }}
+        result-encoding: json
+        script: | 
+          const validos = ['direct', 'outside', 'all'];
+          const affiliation = `${{ inputs.affiliation }}`;
+          if(!validos.includes(affiliation)) {
+            core.setFailed(`${affiliation}: Afiliación inválida`);
+          }
+
+          const permValidos = ['pull', 'push', 'triage', 'maintain', 'admin', 'any'];
+          const permiso = `${{ inputs.permission }}`;
+          if(!permValidos.includes(permiso)) {
+            core.setFailed(`${permiso}: Permiso inválido`);
+          }
+
+          const attrs = {
+            owner: context.repo.owner,
+            repo: `${{ inputs.repo-name }}`,
+            affiliation: affiliation
+          }
+
+          if(permiso != 'any') attrs.permission = permiso;
+
+          const collaborators = (await github.paginate(
+            github.rest.repos.listCollaborators, attrs
+          ));
+
+          return collaborators;

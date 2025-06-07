@@ -1,0 +1,58 @@
+name: Registrar repositorios
+description: Registra repositorios en forma de archivo JSON
+
+inputs:
+  content:
+    description: Contenido del registro
+    required: true
+    type: string
+  file:
+    description: Nombre del archivo de registro
+    required: true
+    type: string
+  branch:
+    description: Rama a la que se sube el archivo
+    required: true
+    type: string
+  path:
+    description: Directorio del contenedor en que trabaja el script
+    required: false
+    default: .
+    type: string
+  message:
+    description: Mensaje para el commit
+    required: true
+    type: string
+  github-token:
+    required: true
+    type: string
+
+runs:
+  using: composite
+  steps:
+    - name: Configurar Git
+      shell: bash
+      env:
+        TOKEN: ${{ inputs.github-token }}
+        USERNAME: Github Actions
+        USERMAIL: actions@github.com
+      working-directory: ${{ inputs.path }}
+      run: |
+        git config --global user.name "$USERNAME"
+        git config --global user.email "$USERMAIL"
+        git remote set-url origin "https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+    - name: Escribir archivo
+      shell: bash
+      working-directory: ${{ inputs.path }}
+      run: |
+        echo ${{ toJSON(inputs.content) }} > "${{ inputs.file }}"
+    - name: Actualizar repositorio
+      shell: bash
+      working-directory: ${{ inputs.path }}
+      env:
+        MESSAGE: ${{ inputs.message }}
+      run: |
+        git add "${{ inputs.file }}"
+        git commit -m "${MESSAGE}"
+        git push origin "${{ inputs.branch }}"
+        echo "::notice::${MESSAGE}"

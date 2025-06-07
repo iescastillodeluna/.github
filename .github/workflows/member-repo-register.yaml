@@ -1,0 +1,50 @@
+name: Registrar repositorio de miembro
+run-name: "Anotación del repositorio '${{ github.event.client_payload.repository.name }}'"
+
+on:
+  repository_dispatch:
+    types: 
+      - member-repo-created
+
+jobs:
+  comprueba-creador:
+    runs-on: ubuntu-latest
+    outputs:
+      esMiembro: ${{ steps.check-member.outputs.esMiembro }}
+    steps:
+      - name: Obtiene el repositorio
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          token: ${{ secrets.ORGANIZATION_ACCESS_TOKEN }}
+          path: main
+
+      - name: Comprueba si el creador es miembro
+        id: check-member
+        uses: ./main/.github/actions/check-member
+        with:
+          creator-login: ${{ github.event.client_payload.sender.login }}
+          github-token: ${{ secrets.ORGANIZATION_ACCESS_TOKEN }}
+
+      - name: Advertencia
+        if: steps.check-member.outputs.esMiembro != 'true'
+        env:
+          CREADOR: ${{ github.event.client_payload.sender.login }}
+          REPONAME: ${{ github.event.client_payload.repository.name }}
+          REPOURL: ${{ github.event.client_payload.repository.html_url }}
+        run: |
+          echo "::warning::El creador '${CREADOR}' del repositorio [${REPONAME}]({$REPOURL}) no es miembro de la organización"
+
+  registrar-repositorio:
+    needs: comprueba-creador
+    if: needs.comprueba-creador.outputs.esMiembro == 'true'
+    uses: ./.github/workflows/repo-register.yaml
+    with:
+      event: ${{ toJSON(github.event) }}
+      regfile: repo-miembros.json
+      branch: plantillas
+      debug: false
+    secrets:
+      ORGANIZATION_ACCESS_TOKEN: ${{ secrets.ORGANIZATION_ACCESS_TOKEN }}
+    permissions:
+      contents: write

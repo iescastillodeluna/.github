@@ -1,0 +1,97 @@
+name: Proteger rama principal
+run-name: "Protección automática de '${{ github.event.client_payload.repository.name }}'"
+
+on:
+  repository_dispatch:
+    types: 
+      - student-repo-created
+
+jobs:
+  precondiciones:
+    runs-on: ubuntu-latest
+    outputs:
+      students: ${{ steps.get-students.outputs.collaborators }}
+    steps:
+      - name: Obtener repositorio
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          token: ${{ secrets.ORGANIZATION_ACCESS_TOKEN }}
+          path: main
+
+      - name: Lanzar acciones de depuración
+        if: false
+        uses: ./main/.github/actions/info-debug
+        with:
+          event: ${{ toJSON(github.event) }}
+          event-name: student-create
+          repo-name: ${{ github.event.client_payload.repository.name }}
+          github-token: ${{ secrets.ORGANIZATION_ACCESS_TOKEN }}
+
+      - name: Verificar estudiantes
+        id: get-students
+        uses: ./main/.github/actions/get-collaborators
+        with:
+          repo-name: ${{ github.event.client_payload.repository.name }}
+          affiliation: outside
+          permission: push
+          github-token: ${{ secrets.ORGANIZATION_ACCESS_TOKEN }}
+
+  proteger-rama-main:
+    needs: precondiciones
+    if: needs.precondiciones.outputs.students != '[]'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Proteger rama main
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.ORGANIZATION_ACCESS_TOKEN }}
+          script: |
+            try {
+              const repoName = context.payload.client_payload.repository.name;
+              await github.rest.repos.updateBranchProtection({
+                owner: context.repo.owner,
+                repo: repoName,
+                branch: 'main',
+                required_status_checks: null,
+                enforce_admins: true,
+                required_pull_request_reviews: {
+                  required_approving_review_count: 1
+                },
+                restrictions: null
+              });
+
+              const repoUrl = `https://github.com/${context.repo.owner}/${repoName}`;
+              core.notice(`✅ Protección aplicada en ${repoUrl}`);
+            } catch (error) {
+              core.setFailed(`❌ Fallo: ${error.message}`);
+            }
+
+      - name: Crear rama desarrollo
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.ORGANIZATION_ACCESS_TOKEN }}
+          script: |
+            const repoName = context.payload.client_payload.repository.name;
+            try {
+              const mainRef = await github.rest.repos.getBranch({
+                owner: context.repo.owner,
+                repo: repoName,
+                branch: 'main'
+              });
+
+              const sha = mainRef.data.commit.sha;
+
+              await github.rest.git.createRef({
+                owner: context.repo.owner,
+                repo: repoName,
+                ref: 'refs/heads/desarrollo',
+                sha: sha
+              });
+            }
+            catch (error) {
+              core.setFailed(`❌ Error al crear la rama: ${error.message}`);
+            }

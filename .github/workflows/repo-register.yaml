@@ -1,0 +1,170 @@
+name: Registrar repositorio en archivo JSON
+run-name: "Anotación del repositorio '${{ fromJSON(inputs.event).client_payload.repository.name }}'"
+
+on:
+  workflow_call:
+    inputs:
+      event:
+        description: Evento original
+        type: string
+        required: true
+      regfile:
+        description: Archivo de registro
+        type: string
+        required: true
+      branch: 
+        description: Rama auxiliar para registros
+        type: string
+        required: true
+      debug:
+        description: Si se quiere depurar
+        type: boolean
+        required: false
+        default: false
+    secrets:
+      ORGANIZATION_ACCESS_TOKEN:
+        required: true
+
+env:
+  WORK_DIR: repo
+
+jobs:
+  precondiciones:
+    runs-on: ubuntu-latest
+    outputs:
+      students: ${{ steps.get-students.outputs.collaborators }}
+    steps:
+      - name: Obtener repositorio
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          token: ${{ secrets.ORGANIZATION_ACCESS_TOKEN }}
+          path: main
+
+      - name: Lanzar acciones de depuración
+        if: inputs.debug == true
+        uses: ./main/.github/actions/info-debug
+        with:
+          event: ${{ inputs.event }}
+          event-name: ${{ fromJSON(inputs.event).action }}
+          repo-name: ${{ fromJSON(inputs.event).client_payload.repository.name }}
+          github-token: ${{ secrets.ORGANIZATION_ACCESS_TOKEN }}
+
+      - name: Verificar estudiantes
+        id: get-students
+        uses: ./main/.github/actions/get-collaborators
+        with:
+          repo-name: ${{ fromJSON(inputs.event).client_payload.repository.name }}
+          affiliation: outside
+          permission: push
+          github-token: ${{ secrets.ORGANIZATION_ACCESS_TOKEN }}
+
+  anotar-plantilla:
+    needs: precondiciones
+    if: needs.precondiciones.outputs.students == '[]'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Obtener el repositorio
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.branch }}
+          token: ${{ secrets.ORGANIZATION_ACCESS_TOKEN }}
+          path: ${{ env.WORK_DIR }}
+          fetch-depth: 0
+        continue-on-error: true
+
+      - name: Crear la rama auxiliar
+        env:
+          FILE: ${{ inputs.regfile }}
+          BRANCH: ${{ inputs.branch }}
+        working-directory: ${{ env.WORK_DIR }}
+        run: |
+          # Crear como rama huérfana si no existe
+          if git checkout --orphan ${BRANCH}; then
+            git config --global user.name "GitHub Actions"
+            git config --global user.email "actions@github.com"
+            # Inicializar JSON
+            echo '[]' > ${FILE}
+            
+            # Primer commit
+            git add ${FILE}
+            git commit -m "Crear rama ${BRANCH} vacía"
+            git push origin ${BRANCH}
+          else  # Ya existe.
+            echo "La rama ${BRANCH} ya existe"
+          fi
+
+      - name: Actualizar registro JSON
+        uses: actions/github-script@v7
+        id: get-list
+        env:
+          REPO_NAME: ${{ fromJSON(inputs.event).client_payload.repository.name }}
+          REPO_URL: ${{ fromJSON(inputs.event).client_payload.repository.html_url }}
+          FILE: ${{ inputs.regfile }}
+          BRANCH: ${{ inputs.branch }}
+        with:
+          script: |
+            process.chdir("${{ env.WORK_DIR }}");
+
+            const fs = require('fs');
+            const event = JSON.parse(`${{ inputs.event }}`);
+            const { REPO_NAME, REPO_URL, FILE, BRANCH } = process.env;
+            const now = new Date().toISOString();
+
+            // Actualizamos por si cambió la rama remota.
+            require('child_process').execSync(`
+              git fetch
+              git pull origin ${BRANCH} --rebase`
+            );
+
+            // Inicializar JSON si no existe
+            if (!fs.existsSync(FILE)) {
+              fs.writeFileSync(FILE, '[]');
+            }
+            
+            const repos = JSON.parse(fs.readFileSync(FILE));
+
+            let esteRepo = repos.find(repo => repo.name === REPO_NAME);
+            let accion;
+            if(esteRepo) {
+              accion = `Actualizar fecha de '${REPO_NAME}'`;
+              core.warning(`⚠️ ${REPO_NAME} ya estaba registrado. Algo raro ocurre.`)
+            }
+            else {
+              accion = `Añadir '${REPO_NAME}'`;
+              esteRepo = { name: REPO_NAME };
+              repos.push(esteRepo);
+            }
+            
+            esteRepo.date = now;
+            if(event.action == "member-create") {
+              Object.assign(esteRepo, {
+                member: event.client_payload.sender.login,
+                template: null
+              });
+            }
+
+            core.setOutput('accion', accion);
+
+            return repos;
+
+      - name: Obtener rama principal del repositorio
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          token: ${{ secrets.ORGANIZATION_ACCESS_TOKEN }}
+          path: main
+
+      - name: Registrar nueva lista
+        if: ${{ steps.get-list.outputs.result != 'null' }}
+        uses: ./main/.github/actions/save-list
+        with:
+          content: ${{ steps.get-list.outputs.result }}
+          file: ${{ inputs.regfile }}
+          branch: ${{ inputs.branch }}
+          path: ${{ env.WORK_DIR }}
+          message: ${{ steps.get-list.outputs.accion }}
+          github-token: ${{ secrets.ORGANIZATION_ACCESS_TOKEN }}

@@ -1,0 +1,98 @@
+name: Información de depuración
+
+inputs:
+  event:
+    description: JSON del evento
+    required: false
+    default: ""
+    type: string
+  repo-name:
+    description: Nombre del repositorio
+    required: false
+    default: ""
+    type: string
+  event-name:
+    description: Nombre del evento
+    required: true
+    type: string
+  github-token:
+    required: true
+    type: string
+
+env:
+  WORK_DIR: info-debug
+
+runs:
+  using: composite
+  steps:
+    - name: Crear directorio auxiliar
+      shell: bash
+      run: |
+        mkdir -p "${WORK_DIR}"
+
+    - name: Crear archivo JSON con evento
+      if: ${{ inputs.event != '' }}
+      working-directory: ${{ env.WORK_DIR }}
+      shell: bash
+      env:
+        JSON: ${{ inputs.event }}
+      run: |
+        echo "$JSON" | jq . > event-${{ inputs.event-name }}.json
+        echo "::notice::Evento '${{ inputs.event-name }}' registrado"
+
+    - name: Crear archivo JSON con info del repositorio
+      if: ${{ inputs.repo-name !='' }}
+      uses: actions/github-script@v6
+      with:
+        github-token: ${{ inputs.github-token }}
+        script: |
+          process.chdir(process.env.WORK_DIR);
+
+          const repoName = '${{ inputs.repo-name }}';
+          const org = context.repo.owner;
+          
+          try {
+            // Obtener información completa del repositorio
+            const repoInfo = await github.rest.repos.get({
+              owner: org,
+              repo: repoName
+            });
+            
+            // Obtener colaboradores externos
+            const outsideCollaborators = await github.paginate(
+              github.rest.repos.listCollaborators, {
+                owner: org,
+                repo: repoName,
+                affiliation: 'outside'
+              }
+            );
+            
+            // Obtener colaboradores directos
+            const directCollaborators = await github.paginate(
+              github.rest.repos.listCollaborators, {
+                owner: org,
+                repo: repoName,
+                affiliation: 'direct'
+              }
+            );
+            
+            // Guardar datos en archivos
+            const fs = require('fs');
+            fs.writeFileSync(`repo_${repoName}.json`, JSON.stringify(repoInfo.data, null, 2));
+            fs.writeFileSync('collaborators-outside.json', JSON.stringify(outsideCollaborators, null, 2));
+            fs.writeFileSync('collaborators-direct.json', JSON.stringify(directCollaborators, null, 2));
+            
+            core.notice(`✅ Obtenida información de [${{ inputs.repo-name }}](${repoInfo.data.html_url})`);
+          } catch (error) {
+            core.error(`❌ Error al obtener información del repositorio: ${error.message}`);
+          }
+
+    - name: Crear artefacto
+      if: ${{ inputs.event != '' || inputs.repo-name !='' }}
+      uses: actions/upload-artifact@v4
+      # Para que funcione con el repositorio .github
+      with:
+        include-hidden-files: true
+        name: info-debug
+        retention-days: 1
+        path: ${{ env.WORK_DIR }}/*.json

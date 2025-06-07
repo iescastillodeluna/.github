@@ -1,0 +1,246 @@
+name: Fiscalizar los repositorios base
+
+on:
+  schedule:
+    - cron: '0 2 * 1-6,9-12 0'
+  workflow_dispatch:
+
+env:
+  BRANCH: plantillas
+  FILE: plantillas.json
+  WORK_DIR: repo
+
+jobs:
+  verificar-registro:
+    outputs:
+      success: ${{ steps.check-pre.outputs.success }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Obtener rama principal del repositorio
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          token:  ${{ secrets.ORGANIZATION_ACCESS_TOKEN }}
+          path: main
+
+      - name: Comprobar rama y archivo
+        id: check-pre
+        run: |
+          cd main
+          git fetch origin
+          if git checkout "$BRANCH" 2> /dev/null; then
+            if test -f "$FILE"; then
+              echo "success=true" >> $GITHUB_OUTPUT
+            else
+              echo "::error::El archivo $FILE que registra las plantillas de tarea no existe"
+              echo "success=false" >> $GITHUB_OUTPUT
+            fi
+          else
+            echo "::error:: La rama '${BRANCH}' no existe"
+            echo "success=false" >> $GITHUB_OUTPUT
+          fi
+
+  plantillas-usadas:
+    needs: verificar-registro
+    runs-on: ubuntu-latest
+    if: needs.verificar-registro.outputs.success == 'true'
+    outputs:
+      templates: ${{ steps.get-templates.outputs.result }}
+
+    steps:
+      - name: Obtener plantillas utilizadas
+        id: get-templates
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.ORGANIZATION_ACCESS_TOKEN }}
+          result-encoding: json
+          script: |
+            try {
+              const org = context.repo.owner;
+              
+              const aulas = await github.paginate(
+                github.request,
+                {
+                  method: 'GET',
+                  url: `/classrooms`,
+                  headers: {
+                    'X-GitHub-Api-Version': '2022-11-28',
+                    'Accept': 'application/vnd.github.v3+json'
+                  }
+                }
+              );
+
+              const templates = new Set();
+
+              for(const aula of aulas) {
+                // Se obtienen las tareas de cada aula.
+                let tareas = await github.paginate(
+                    github.request,
+                    {
+                      method: 'GET',
+                      url: `/classrooms/${aula.id}/assignments`,
+                      headers: {
+                        'X-GitHub-Api-Version': '2022-11-28'
+                      }
+                    }
+                );
+
+                // Como la respuesta anterior no proporciona toda la información,
+                // es necesario consultar cada tarea para saber si tiene plantilla.
+                for(const tarea of tareas) {
+                  const info = await github.request(
+                    {
+                      method: 'GET',
+                      url: `/assignments/${tarea.id}`,
+                      headers: {
+                        'X-GitHub-Api-Version': '2022-11-28'
+                      }
+                    }
+                  );
+
+                  if(info.data.starter_code_repository) {
+                    templates.add(info.data.starter_code_repository.name);
+                  }
+                }
+              }
+              
+              return Array.from(templates);
+
+            } catch (error) {
+              core.setFailed(`Error: ${error.response?.data?.message || error.message}`);
+            }
+
+  plantillas-registradas:
+    needs: plantillas-usadas
+    runs-on: ubuntu-latest
+    steps:
+      - name: Obtener rama de plantillas del repositorio
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.BRANCH }}
+          token:  ${{ secrets.ORGANIZATION_ACCESS_TOKEN }}
+          path: ${{ env.WORK_DIR }}
+
+      - name: Leer archivo de plantillas
+        uses: actions/github-script@v6
+        id: registred-templates
+        with:
+          result-encoding: json
+          script: |
+            process.chdir('${{ env.WORK_DIR }}');
+
+            try {
+              const fs = require('fs');
+              const archivo = process.env.FILE;
+
+              let plantillasRegistradas = "[]";
+              if(fs.existsSync(archivo)) {
+                plantillasRegistradas = fs.readFileSync(archivo, "utf8");
+              }
+
+              return plantillasRegistradas;
+            }
+            catch(error) {
+              core.setFailed(`Error: ${error.message}`);
+            }
+
+      - name: Comparar ambas listas de plantillas
+        id: analyze-templates
+        uses: actions/github-script@v6
+        with:
+          github-token: ${{ secrets.ORGANIZATION_ACCESS_TOKEN }}
+          script: |
+            const plantillasUsadas = JSON.parse(${{ toJSON(needs.plantillas-usadas.outputs.templates) }});
+            const plantillasRegistradas = JSON.parse(${{ steps.registred-templates.outputs.result }});
+            console.log(plantillasUsadas);
+            console.log(plantillasRegistradas);
+
+            const plantillasObsoletas = plantillasRegistradas.filter(
+              registrada => !plantillasUsadas.includes(registrada.name)
+            ).map(obsoleta => obsoleta.name);
+
+            const plantillasNoRegistradas = plantillasUsadas.filter(
+              usada => !plantillasRegistradas.some(plantilla => plantilla.name == usada)
+            );
+
+            const output = ["Plantillas en uso no registradas:"];
+            for(const plantilla of plantillasNoRegistradas) {
+              output.push(`  - ${plantilla}`);
+            }
+            if(output.length > 1) core.warning(output.join("\n"));
+
+            let plantillasARegistrar = [];
+            if(plantillasObsoletas.length > 0 || plantillasNoRegistradas.length > 0) {
+              plantillasARegistrar = plantillasUsadas.map(usada => {
+                const registrada = plantillasRegistradas.find(registrada => usada === registrada.name);
+                return registrada || {name: usada, date: new Date().toISOString()}
+              });
+            }
+
+            core.setOutput("obsoletas", JSON.stringify(plantillasObsoletas));
+            core.setOutput("aregistrar", JSON.stringify(plantillasARegistrar));
+
+      - name: Registrar plantillas
+        if: steps.analyze-templates.outputs.aregistrar != '[]'
+        uses: actions/github-script@v6
+        with:
+          github-token: ${{ secrets.ORGANIZATION_ACCESS_TOKEN }}
+          script: |
+            process.chdir('repo');
+
+            const plantillas = JSON.parse(${{ toJSON(steps.analyze-templates.outputs.aregistrar) }});
+ 
+            const filePath = process.env.FILE;
+            const hoy = new Date();
+            const hoyString = String(hoy.getDate()).padStart(2, '0') + "/" + String(hoy.getMonth() + 1).padStart(2, '0') + "/" + hoy.getFullYear();
+
+            const fs = require('fs');
+            fs.writeFileSync(filePath, JSON.stringify(plantillas, null, 2));
+
+            // Commit y push automático
+            await require('child_process').execSync(`
+              git config --global user.name "GitHub Actions"
+              git config --global user.email "actions@github.com"
+              git add ${filePath}
+              git commit -m "Actualización de ${hoyString}"
+              git push origin plantillas
+            `, {stdio: 'inherit'});
+
+            const output = plantillas.map(plantilla => `  - ${plantilla.name}`);
+            if(output.length > 0) {
+              const summary = core.summary
+                .addHeading("Plantillas registradas:")
+                .addRaw("\n" + output.join("\n")+ "\n")
+                .write();
+            }
+
+            core.notice("Actualizada la rama plantillas");
+
+      - name: Borrar plantillas obsoletas
+        uses: actions/github-script@v6
+        with:
+          github-token: ${{ secrets.ORGANIZATION_ACCESS_TOKEN }}
+          script: |
+            const plantillas = JSON.parse(${{ toJSON(steps.analyze-templates.outputs.obsoletas) }});
+
+            const output = []
+            await Promise.all(plantillas.map(async plantilla => {
+              try {
+                await github.rest.repos.delete({
+                  owner: context.repo.owner,
+                  repo: plantilla
+                });
+                core.notice(`✅ Eliminada plantilla ${plantilla}`);
+                output.push(`${plantilla}`);
+              }
+              catch(error) {
+                core.error(`❌ Error eliminando ${plantilla}: ${error.message}`);
+              }
+            }));
+
+            if(output.length > 0) {
+              const summary = core.summary
+                .addHeading("Plantillas eliminadas:")
+                .addRaw("\n" + output.join("\n")+ "\n")
+                .write();
+            }

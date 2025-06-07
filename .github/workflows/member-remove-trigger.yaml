@@ -1,0 +1,36 @@
+name: Proceso tras eliminación de miembro
+run-name: "Proceso tras eliminar a '${{ github.event.client_payload.membership.user.login }}'"
+
+on:
+  repository_dispatch:
+    types: 
+      - member-removed
+
+jobs:
+  depurar:
+    if: false
+    runs-on: ubuntu-latest
+    steps:
+      - name: Obtener repositorio
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          token: ${{ secrets.ORGANIZATION_ACCESS_TOKEN }}
+          path: main
+
+      - name: Lanzar acciones de depuración
+        uses: ./main/.github/actions/info-debug
+        with:
+          event: ${{ toJSON(github.event) }}
+          event-name: member_removed
+          github-token: ${{ secrets.ORGANIZATION_ACCESS_TOKEN }}
+
+  eliminar-repositorios:
+    uses: ./.github/workflows/member-repo-remover.yaml
+    with:
+      username: ${{ github.event.client_payload.membership.user.login }}
+      delete: true
+    secrets:
+      ORGANIZATION_ACCESS_TOKEN: ${{ secrets.ORGANIZATION_ACCESS_TOKEN }}
+    permissions:
+      contents: write

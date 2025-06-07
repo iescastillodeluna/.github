@@ -1,0 +1,51 @@
+name: Comprobar la membresía de un usuario
+
+inputs:
+  creator-login:
+    description: Nombre del usuario
+    required: false
+    default: ''
+    type: string
+  role:
+    required: false
+    default: member
+    type: string
+  github-token:
+    required: true
+    type: string
+
+outputs:
+  esMiembro:
+    description: '¿El creador es miembro?'
+    value: ${{ steps.check-creator.outputs.result }}
+
+runs:
+  using: composite
+  steps:
+    - name: Comprueba el creador
+      id: check-creator
+      uses: actions/github-script@v7
+      with:
+        github-token: ${{ inputs.github-token }}
+        result-encoding: string
+        script: | 
+          const validos = ['member', 'admin', 'billing_manager'];
+          const role = `${{ inputs.role }}`;
+          if(!validos.includes(role)) {
+            core.setFailed(`${role}: Rol inválido`);
+          }
+
+          const miembros = (await github.paginate(
+            github.rest.orgs.listMembers, {
+              org: context.repo.owner,
+              role: role
+            }
+          )).map(miembro => miembro.login);
+
+          const creador = `${{ inputs.creator-login }}`;
+
+          // Si no se facilita nombre de miembro se devuelve la lista completa;
+          // si se facilita, se duelve si pertenece o no.
+          return (creador === '')
+            ? JSON.stringify(miembros)
+            : miembros.includes(creador).toString();

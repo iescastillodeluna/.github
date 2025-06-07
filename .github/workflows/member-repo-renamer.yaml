@@ -1,0 +1,74 @@
+name: Renombrar repositorio de miembro
+run-name: "Renombrar repositorio '${{ github.event.client_payload.repository.name }}'"
+
+on:
+  repository_dispatch:
+    types: 
+      - repo-renamed
+
+env:
+  FILE: repo-miembros.json
+  BRANCH: plantillas
+  WORK_DIR: repo
+
+jobs:
+  renombrar-repositorio:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Obtener rama almacen del repositorio
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.BRANCH }}
+          token:  ${{ secrets.ORGANIZATION_ACCESS_TOKEN }}
+          path: ${{ env.WORK_DIR }}
+
+      - name: Generar nueva lista
+        uses: actions/github-script@v7
+        id: get-list
+        with:
+          github-token: ${{ secrets.ORGANIZATION_ACCESS_TOKEN }}
+          result-encoding: json
+          script: |
+            process.chdir(process.env.WORK_DIR);
+
+            const fs = require('fs');
+            const archivo = process.env.FILE;
+
+            const repoRegistrados = fs.existsSync(archivo)
+              ? JSON.parse(fs.readFileSync(archivo, "utf8"))
+              : [];
+
+            const newname = '${{ github.event.client_payload.repository.name }}';
+            const oldname = '${{ github.event.client_payload.changes.repository.name.from }}'
+            const repo = repoRegistrados.find(r => r.name === oldname);
+
+            if(!repo) {
+              core.warning(`${oldname} renombrado a ${newname} no está registrado`);
+              return null;
+            }
+
+            // Actualizamos el registro
+            Object.assign(repo, {
+              name: newname,
+              template: ${{ github.event.client_payload.repository.is_template }}
+            });
+
+            return repoRegistrados;
+
+      - name: Obtener rama principal del repositorio
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          token: ${{ secrets.ORGANIZATION_ACCESS_TOKEN }}
+          path: main
+
+      - name: Registrar nueva lista
+        if: ${{ steps.get-list.outputs.result != 'null' }}
+        uses: ./main/.github/actions/save-list
+        with:
+          content: ${{ steps.get-list.outputs.result }}
+          file: ${{ env.FILE }}
+          branch: ${{ env.BRANCH }}
+          path: ${{ env.WORK_DIR }}
+          message: "Renombra el repositorio '${{ github.event.client_payload.repository.name }}'"
+          github-token: ${{ secrets.ORGANIZATION_ACCESS_TOKEN }}

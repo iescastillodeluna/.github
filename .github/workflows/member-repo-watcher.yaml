@@ -1,0 +1,243 @@
+name: Fiscalizar repositorios de miembros
+
+on:
+  schedule:
+    - cron: '30 1 * 1-6,9-12 0'
+  workflow_dispatch:
+    inputs:
+      save:
+        description: "Guardar en el registro"
+        type: boolean
+        required: true
+        default: false
+
+env:
+  BRANCH: plantillas
+  FILE: repo-miembros.json
+  WORK_DIR: repo
+
+jobs:
+  obtener-registro-repositorios:
+    outputs:
+      repos: ${{ steps.get-list.outputs.result }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Obtener rama registral del repositorio
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.BRANCH }}
+          token:  ${{ secrets.ORGANIZATION_ACCESS_TOKEN }}
+          path: ${{ env.WORK_DIR }}
+        continue-on-error: true
+
+      - name: Obtener registros
+        id: get-list
+        working-directory: ${{ env.WORK_DIR }}
+        run: |
+          [ -f "${FILE}" ] || exit 1
+          echo result="$(< "${FILE}")" > $GITHUB_OUTPUT
+        continue-on-error: true
+
+  comprobar-estado-repositorios:
+    needs: obtener-registro-repositorios
+    if: needs.obtener-registro-repositorios.outputs.repos != ''
+    runs-on: ubuntu-latest
+    outputs:
+      repos: ${{ steps.scan-repos.outputs.result }}
+    steps:
+      - name: Escanea repositorios
+        id: scan-repos
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.ORGANIZATION_ACCESS_TOKEN }}
+          result-encoding: json
+          script: |
+            const memberRepos = JSON.parse(${{ toJson(needs.obtener-registro-repositorios.outputs.repos) }});
+            const now = new Date().toISOString();
+
+            // Repositorios creados manualmente.
+            const manuales = (await github.paginate(
+              github.rest.repos.listForOrg, {
+              org: context.repo.owner,
+            })).filter(r => !r.description?.endsWith('created by GitHub Classroom'));
+
+            const registrados = memberRepos
+              .filter(repo => {
+                const r = manuales.find(r => r.name === repo.name);
+                if(r) {
+                  if(repo.template !== r.is_template) {
+                    repo.template = r.is_template;
+                    repo.url = r.html_url;
+                    repo.updated = true;
+                    repo.date = now;
+                  }
+                } 
+                else core.warning(`'${repo.name}' no es ya un repositorio de la organización`);
+                return !!r;
+               });
+            
+            const sinregistro = manuales
+              .filter(repo => !registrados.find(r => r.name === repo.name))
+              .map(r => ({
+                name: r.name,
+                template: r.is_template,
+                url: r.html_url,
+                date: now,
+                member: null,
+                updated: true
+               }));
+
+            // Unimos ambas listas, porque se tratan del mismo modo.
+            registrados.push(...sinregistro);
+
+            return { include: registrados };
+      
+  # Se comprueba si su creador sigue siendo el único.
+  repasar-repositorios:
+    needs: comprobar-estado-repositorios
+    strategy:
+      matrix: ${{ fromJSON(needs.comprobar-estado-repositorios.outputs.repos) }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Obtener repositorio
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          token: ${{ secrets.ORGANIZATION_ACCESS_TOKEN }}
+          path: main
+
+      - name: Obtener colaboradores
+        id: get-col
+        uses: ./main/.github/actions/get-collaborators
+        with:
+          repo-name: ${{ matrix.name }}
+          affiliation: direct
+          permission: admin
+          github-token: ${{ secrets.ORGANIZATION_ACCESS_TOKEN }}
+
+      - name: Obtener miembros
+        id: get-members
+        uses: ./main/.github/actions/check-member
+        with: 
+          github-token: ${{ secrets.ORGANIZATION_ACCESS_TOKEN }}
+
+      - name: Determinar miembro
+        id: set-member
+        uses: actions/github-script@v7
+        with:
+          result-encoding: json
+          script: |
+            const collaborators = JSON.parse(${{ toJson(steps.get-col.outputs.collaborators) }})
+            const members = JSON.parse(${{ toJson(steps.get-members.outputs.esMiembro) }})
+            const now = new Date().toISOString();
+
+            const repo = ${{ toJson(matrix) }};
+
+            // Si se eliminó el usuario, entonces dejó de tener permisos;
+            // así que fingimos que los sigue teniendo para razonar.
+            const eliminado = repo.member && !members.includes(repo.member);
+            if(eliminado) collaborators.push(repo.member);
+
+            // Los repositorios con un colaborador se consideran de miembro
+            if(collaborators.length === 1) {
+              // Y habrá que cambiar la propiedad si cambió o no existía.
+              if(repo.member !== collaborators[0].login) {
+                if(repo.member) {
+                  core.notice(`El repositorio '${repo.name}' ha pasado de '${repo.member}' a '${collaborators[0].login}'`);
+                }
+                repo.member = collaborators[0].login;
+                repo.date = now;
+                repo.updated = true;
+              }
+            }
+            // El resto de repositorios no son de miembro,
+            // así que si lo era antes, tendrá que dejar de serlo.
+            else if(repo.member) {
+              core.notice(`El repositorio '${repo.name}' tiene manipulados sus permisos y ya no se considera propio de un '${repo.member}'`);
+              repo.member = null;
+            }
+
+            // En este punto, los repositorios con member: null
+            // no son de miembro y no deben estar en registro.
+            return repo;
+
+      - name: Almacenar en archivo
+        if: fromJSON(steps.set-member.outputs.result).member != null
+        env:
+          INFO: ${{ steps.set-member.outputs.result }}
+        run: |
+          echo "$INFO" > "repo-${{ matrix.name }}".json
+
+      - name: Crear artefacto
+        if: fromJSON(steps.set-member.outputs.result).member != null
+        uses: actions/upload-artifact@v4
+        with:
+          name: repo-${{ matrix.name }}
+          retention-days: 1
+          path: repo-${{ matrix.name }}.json
+
+  generar-registro:
+    needs: repasar-repositorios
+    runs-on: ubuntu-latest
+    outputs:
+      registro: ${{ steps.create-array.outputs.result }}
+    steps:
+      - name: Descarga artefacto
+        uses: actions/download-artifact@v4
+        with:
+          pattern: repo-*
+          # Todos los repo.*.json acaban directamente dentro de kk/
+          path: kk
+          merge-multiple: true
+
+      - name: Combinar en un array
+        id: create-array
+        uses: actions/github-script@v7
+        with:
+          result-encoding: json
+          script: |
+            const fs = require('fs');
+            const archivos = fs.readdirSync('kk').filter(f => f.endsWith('.json'));
+            const repos = archivos.map(file => {
+              const content = fs.readFileSync(`kk/${file}`, 'utf8');
+              return JSON.parse(content);
+            }).sort((a,b) => a.member.localeCompare(b.member));
+
+            const summary = core.summary;
+            summary.addHeading('Repositorios de miembro');
+            summary.addRaw('\n' + repos.map(r => `1. *${r.member}*  ---  [${r.name}](${r.url})${r.template?' [Plantilla]':''}`).join('\n'));
+            await summary.write();
+
+            if(repos.some(r => r.updated)) {
+              // Eliminamos updated y url porque no se almacenan en el archivo
+              return repos.map(({updated, url, ...rest}) => rest);
+            }
+
+  guardar-registro:
+    needs: generar-registro
+    if: (inputs.save == true || github.event_name == 'schedule') && needs.generar-registro.outputs.registro != '' 
+    runs-on: ubuntu-latest
+    steps:
+      - name: Obtener la rama principal del repositorio
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          token: ${{ secrets.ORGANIZATION_ACCESS_TOKEN }}
+          path: main
+
+      - name: Obtener la rama almacen del repositorio
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.BRANCH }}
+          token: ${{ secrets.ORGANIZATION_ACCESS_TOKEN }}
+          path: ${{ env.WORK_DIR }}
+
+      - name: Guardar registro en el repositorio
+        uses: ./main/.github/actions/save-list
+        with:
+          content: ${{ needs.generar-registro.outputs.registro }}
+          file: ${{ env.FILE }}
+          branch: ${{ env.BRANCH }}
+          path: ${{ env.WORK_DIR }}
+          message: "Regenera el registro de repositorios de miembros"
+          github-token: ${{ secrets.ORGANIZATION_ACCESS_TOKEN }}
