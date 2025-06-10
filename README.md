@@ -31,13 +31,13 @@ Esta definición permite a los profesores exclusivamente:
 > Los profesores no tienen potestad para crear nuevas aulas en la organización:
 > simplemente serán capaces de ver y gestionar aquellas en las que el
 > propietario de la organización lo haya habilitado como administrador del
-> aula.
+> aula. Para más información consulte la [Guía del profesor](docs/GuiaProfesor.md).
 
 ### Repositorios problemáticos
 
 En GitHub, los repositorios se acomulan en la organización sin posibilidad de
 clasificarse, lo cual supone que, si no se lleva ningún control, se vayan
-acomulando repositorios que ya sean inútiles:
+acomulando repositorios que se han vuelto inútiles:
 
 1. **Repositorios creados por profesores**:
    Para tareas que utilicen una plantilla como base para los repositorios de
@@ -105,6 +105,15 @@ tareas, se han programado en este repositorio algunos *workflows*:
      de miembro que realmente hay en la organización para corregir errores de
      ejecución de los anteriores. Puede, además, ejecutarse manualmente.
 
+1. Los **repositorios de estudiante** no necesitan gestión, ya que se crean y
+   eliminan al crear y eliminar las tareas a las que están asociados. Sin embargo,
+   hay un *workflow* asociado a ellos:
+
+   * [student-repo-trigger](.github/workflows/student-repo-trigger.yaml), que
+     se lanza cada vez que se crea un repositorio de estudiante para, si procede,
+     proteger su rama principal de cambios y forzar al estudiante a usar la rama
+     *desarrollo*.
+
 1. **Sincronización**:  
    Los *workflows* se han definido inicialmente en el repositorio de configuración
    [.github](https://github.com/iescastillodeluna/.github) de la organización,
@@ -171,10 +180,10 @@ su perfil personal dos *tokens* personales de acceso:
 ![Definición de tokens](docs/assets/03.tokens.png)
 
 El segundo en la captura, que tiene habilitado el scope *workflow*, es el que
-debe usar el *script* del servidor web; mientras que el primero, con más
-permisos, es el que usan los *workflows* del repositorio privado de ejecución
-de workflows y debe utilizarse para definir un **secreto** en dicho repositorio
-llamado ``ORGANIZATION_ACCESS_TOKEN``:
+debe usar el *script* del servidor web (``GITHUB_TOKEN``); mientras que el
+primero, con más permisos, es el que usan los *workflows* del repositorio
+privado de ejecución de workflows y debe utilizarse para definir un **secreto**
+en dicho repositorio llamado ``ORGANIZATION_ACCESS_TOKEN``:
 
 ![Definición de secret](docs/assets/04.secret.png)
 

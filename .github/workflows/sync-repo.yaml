@@ -1,5 +1,5 @@
 name: Sincronización con .github
-run-name: Sincronizacion de ${{ github.repository }}
+run-name: Sincronizacion con ${{ github.event.client_payload.public_repo }}
 
 on:
   workflow_dispatch:
