@@ -58,9 +58,16 @@ sencillo, pero conviene aclarar algunos aspectos:
   consistencia que todos los nombres empiecen por "Tarea ": ``Tarea 1.5``,
   ``Tarea adicional 3``, etc.
 
++ Al definir la tarea (o después al editarla) se puede establecer una fecha
+  límite de entrega. Esta fecha supone que, pasado el límite, el estudiante pase
+  de ser un colaborador externo con permisos de escritura a serlo con permisos
+  de lectura y, por tanto, no pueda hacer nuevas operaciones *push*.
+
 + Una tarea genera un *enlace de suscripción* que hay que facilitar a los
   alumnos que queremos sumar a ella. Tal suscripción no es automática, aunque
   los tengamos ya registrados como [estudiantes del aula](#Estudiantes).
+
+  ![Enlace de suscripcion](assets/gp06.link.png)
 
 + La aceptación de una tarea supone para el alumno la creación de un repositorio
   en la organización, no en su perfil personal, el cual tendrá ciertas
