@@ -30,6 +30,11 @@ tarea recae en el administrador. En particular es importante tener presente:
 * El administrador de la organización es el encargado de registrar como
   administrador de aula al profesor encargado de impartir la asignatura o
   módulo asociado.
+  
+* Aunque un profesor con el *rol* de miembro en la organización es capaz de
+  gestionar un aula, inicialmente no puede ser añadido como administrador.
+  Por eso motivo, cuando se le quiera hacer administrador de algún aula, se
+  le deberá proporcionar temporalmente el *rol* de propietario.
 
 * Debería existir una aula por cada módulo o asignatura para la que se quieran
   usar repositorios de *GitHub*. También podría ser interesante mantener dos: el
